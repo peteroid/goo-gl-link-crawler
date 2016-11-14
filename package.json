@@ -1,0 +1,14 @@
+{
+  "name": "goo-gl-link-crawler",
+  "version": "0.0.1",
+  "description": "A crawler to explore the links on goo.gl",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "redis": "^2.6.3"
+  }
+}
