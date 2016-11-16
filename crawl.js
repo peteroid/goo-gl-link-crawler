@@ -8,6 +8,9 @@ var counts = {
   success: 0
 }
 
+const tryInterval = 500
+var shouldBeWaiting = false
+
 const ALL_CHARS = '1234567890qwertyuiopasdfghjklzxcvbnmPOIUYTREWQASFGHJKLZXCVBNM'
 String.prototype.randomize = function (n) {
   var chars = this.split('')
@@ -18,17 +21,32 @@ String.prototype.randomize = function (n) {
 
 client.on('connect', (err, data) => {
   console.log(err || 'connected')
-  setInterval(function () {
-    var nextToken = ALL_CHARS.randomize(6)
-    client.exists(toRedisKey(nextToken), (err, exists) => {
-      if (!exists) {
-        tryGetLinkAndSave(nextToken)
-      } else {
-        console.log('%s already checked. skip.', nextToken)
-      }
-    })
-  }, 500)
+  setInterval(tryRandomLink, tryInterval)
 })
+
+function tryRandomLink () {
+  if (shouldBeWaiting) return
+  var nextToken = ALL_CHARS.randomize(6)
+  var nextKey = toRedisKey(nextToken)
+  client.exists(nextKey, (err, exists) => {
+    if (!exists) {
+      tryGetLinkAndSave(nextToken)
+    } else {
+      client.type(nextKey, (err, valueType) => {
+        if (err) {
+          console.log(err)
+        } else {
+          if (valueType == 'string') {
+            console.log('%s already checked. skip.', nextToken)
+            // console.log('recorded as %s. retry now', value)
+          } else if (valueType == 'hash') {
+            console.log('ready crawled. skip.')
+          }
+        }
+      })
+    }
+  })
+}
 
 function tryGetLinkAndSave (token) {
   counts.total++
@@ -57,8 +75,13 @@ function getLinkJson (token) {
 
 function recordFailToken (token, errMsg) {
   if (!client.connected) return
+  if (errMsg == 'Quota exceeded') {
+    var sec = 30 + parseInt(Math.random() * 45)
+    console.log('no quota. wait for %ss', sec)
+    waitForSeconds(sec)
+  }
   var key = toRedisKey(token)
-  client.set(key, "not_found", function (err) {
+  client.set(key, errMsg, function (err) {
     if (err) {
       console.log(err)
     } else {
@@ -84,6 +107,13 @@ function saveValidJsonToRedis (token, json) {
     console.log(err || key + ' digged! rate: ' + rate + '%')
     console.log(json['long_url'])
   })
+}
+
+function waitForSeconds (sec) {
+  shouldBeWaiting = true
+  setTimeout(function () {
+    shouldBeWaiting = false
+  }, sec * 1000)
 }
 
 function toRedisKey (token) {
